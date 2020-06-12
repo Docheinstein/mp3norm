@@ -122,7 +122,7 @@ def sacad_fetch_album_cover(artist: str, album: str, resolution: int):
         return cover_b
 
     # Create a temporary file for the cover
-    tmp_fd, tmp_name = tempfile.mkstemp(prefix=f"mp3norm-cover-{album}", suffix=".jpg")
+    tmp_fd, tmp_name = tempfile.mkstemp(prefix=f"mp3norm-cover", suffix=".jpg")
 
     # 4. Fetch the cover (using sacad)
     try:
