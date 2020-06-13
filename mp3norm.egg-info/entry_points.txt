@@ -1,3 +1,0 @@
-[console_scripts]
-mp3norm = mp3norm.__main__:main
-
