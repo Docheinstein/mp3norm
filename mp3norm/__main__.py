@@ -151,7 +151,6 @@ def sacad_fetch_album_cover(artist: str, album: str, resolution: int) -> Optiona
     # Create a temporary file for the cover
     tmp_fd, tmp_name = tempfile.mkstemp(prefix=f"mp3norm-cover", suffix=".jpg")
 
-    # 4. Fetch the cover (using sacad)
     try:
         vprint(f"\tFetching cover for (artist={artist} - album/title={album}) [saving into {tmp_name}]")
         args = ["sacad", artist, album, str(resolution), "-t", "200", tmp_name]
@@ -283,6 +282,8 @@ def mp3norm(path: Path,
         album = google_fetch_album_name(artist, title)
         vprint(f"\tFetched album name: '{album}'")
 
+    # 4. Fetch the cover (using sacad)
+
     cover_b = None
 
     if download_cover and (not covers or force_download_cover):
@@ -320,7 +321,14 @@ def mp3norm(path: Path,
         need_save = True
 
     if cover_b:
-        mp3.tag.images.set(3, cover_b, "image/jpeg")
+        # Eventually remove previous covers (the one not assigned to description '')
+        if covers:
+            descs = [cover.description for cover in covers if cover.description]
+            for desc in descs:
+                covers.remove(desc)
+
+        # Set the new cover
+        covers.set(3, cover_b, "image/jpeg")
         need_save = True
 
     # Skip save if not needed
