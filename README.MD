@@ -8,7 +8,7 @@ Simple script written in Python that extract tags from filename and/or fetch alb
 * `sacad` (only for download albums covers)
 * `selenium` (only for fetch albums names)
 
-# INSTALLATION
+## INSTALLATION
 ```
 pip install mp3norm
 ```
@@ -19,7 +19,7 @@ or
 git clone https://github.com/Docheinstein/mp3norm
 ```
 
-# USAGE
+## USAGE
 
 Run with
 ```
@@ -56,7 +56,7 @@ optional arguments:
   -s, --show-driver     Show the selenium web driver, if used
 ```
 
-# EXAMPLES
+## EXAMPLES
 
 * Extract the mp3 tags for each mp3 file (with the format "\<artist\> - \<title\>.mp3)")
 ```
