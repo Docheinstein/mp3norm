@@ -45,6 +45,24 @@ firefox: Any = None
 
 cover_cache = {} # (artist,album) -> cover_data
 
+
+def cover_cache_put(artist: str, album: str, cover: bytes):
+    if not artist or not album or not cover:
+        return
+    cover_cache[(artist.lower(), album.lower())] = cover
+
+
+def cover_cache_get(artist: str, album: str) -> Optional[bytes]:
+    if not artist or not album:
+        return None
+    return cover_cache[(artist.lower(), album.lower())]
+
+def cover_cache_has(artist: str, album: str) -> bool:
+    if not artist or not album:
+        return False
+    return (artist.lower(), album.lower()) in cover_cache
+
+
 def vprint(*args, **kwargs):
     if not verbose:
         return
@@ -94,15 +112,15 @@ def google_fetch_album_name(artist: str, title: str) -> Optional[str]:
 
     album = None
 
-    firefox.get("https://www.google.com/")
-    assert "Google" in firefox.title
+    # Build the query
+    ss = []
+    if artist:
+        ss += artist.split(" ")
+    if title:
+        ss += title.split(" ")
 
-    query_input = firefox.find_element_by_name("q") # <input>
-    query_input.clear()
-    query_input.send_keys(f"{artist} {title}")
-
-    query_form = firefox.find_element_by_name("f") # <form>
-    query_form.submit()
+    q = "+".join(ss)
+    firefox.get(f"https://www.google.com/search?q={q}&hl=en")
 
     try:
         wait = WebDriverWait(firefox, 5)
@@ -140,11 +158,10 @@ def sacad_fetch_album_cover(artist: str, album: str, resolution: int) -> Optiona
     :param album: the album name (the title is also ok)
     :param resolution: the desired resolution
     """
-    # sacad <artist> <album> <resolution> <cover_file>
 
 
     # Just in case, check whether we have already downloaded this album
-    cover_b = cover_cache.get((artist, album))
+    cover_b = cover_cache_get(artist, album)
     if cover_b:
         return cover_b
 
@@ -153,6 +170,7 @@ def sacad_fetch_album_cover(artist: str, album: str, resolution: int) -> Optiona
 
     try:
         vprint(f"\tFetching cover for (artist={artist} - album/title={album}) [saving into {tmp_name}]")
+        # sacad <artist> <album> <resolution> <cover_file>
         args = ["sacad", artist, album, str(resolution), "-t", "200", tmp_name]
         if verbose:
             subprocess.run(args)
@@ -171,16 +189,19 @@ def sacad_fetch_album_cover(artist: str, album: str, resolution: int) -> Optiona
     # Close the temporary file
     os.close(tmp_fd)
 
-    # Unlink the temporary file
+    # Delete the temporary file
     os.unlink(tmp_name)
 
     # Update the cache
-    cover_b = cover_cache[(artist, album)] = cover_b
+    cover_cache_put(artist, album, cover_b)
 
     return cover_b
 
 
 def mp3norm(path: Path,
+            # -i / -I
+            info: bool,
+            human_info: bool,
             # -e / -E
             extract: bool,
             force_extract: bool,
@@ -194,7 +215,9 @@ def mp3norm(path: Path,
             cover_resolution: int):
     """
     Performs mp3norm actions based on the parameters.
-    :param path: mp3 file or directory of mp3 files to handle
+    :param path: mp3 file to handle
+    :param info: show the meta info of the mp3 file
+    :param human_info: show the meta info of the mp3 file more human friendly
     :param extract: whether extract tags from the filename
     :param force_extract: whether extract tags even if those as already present
     :param extract_pattern: the REGEX pattern to use for extraction
@@ -210,7 +233,7 @@ def mp3norm(path: Path,
         return
 
     # Do we have something to do?
-    if not extract and not fetch_album_name and not download_cover:
+    if not extract and not fetch_album_name and not download_cover and not info:
         vprint("\tSKIP")
         return
 
@@ -231,11 +254,32 @@ def mp3norm(path: Path,
     album = mp3.tag.album
     covers = mp3.tag.images
 
+    yes = "'yes'"
+    no = "'no'"
+
     vprint("\tCURRENT TAGS")
     vprint(f"\t\tARTIST = {s(artist)}")
     vprint(f"\t\tTITLE  = {s(title)}")
     vprint(f"\t\tALBUM  = {s(album)}")
-    vprint(f"\t\tCOVER  = {'yes' if covers else 'no'}")
+    vprint(f"\t\tCOVER  = {yes if covers else no}")
+
+    if info:
+        if human_info:
+            print(f"\tARTIST = {s(artist)}")
+            print(f"\tTITLE  = {s(title)}")
+            print(f"\tALBUM  = {s(album)}")
+            print(f"\tCOVER  = {yes if covers else no}")
+        else:
+            print(f"PATH='{path}' | "
+                  f"ARTIST='{album}' | "
+                  f"TITLE='{album}' | "
+                  f"ALBUM='{album}' | "
+                  f"COVER={yes if covers else no}")
+
+    # Do we still have something to do?
+    if not extract and not fetch_album_name and not download_cover:
+        vprint("\tSKIP")
+        return
 
     # Do we actually have something to do?
     if (artist and title and album and covers) and \
@@ -339,6 +383,37 @@ def mp3norm(path: Path,
         vprint("\tNOT SAVED")
 
 
+def mp3norm_cache(path: Path):
+    """
+    Updates the cache for the given mp3 file.
+    Actually this remind the cover for the album of this track so that
+    further mp3norm calls will use the same cover (if the album is the same).
+    :param path: mp3 file to cache
+    """
+
+    # Ensure that is an mp3 file
+    if not path or not path.is_file() or not path.name.endswith(".mp3"):
+        return
+
+    mp3 = eyed3.load(path)
+
+    if not mp3:
+        vprint(f"Can't load mp3 file: '{path}'")
+        return
+
+    if not mp3.tag:
+        return
+
+    artist = mp3.tag.artist
+    title = mp3.tag.title
+    album = mp3.tag.album
+    cover = mp3.tag.images.get("")
+
+    if cover and not cover_cache_has(artist, album or title):
+        vprint(f"PRE-CACHING COVER of {(artist, album or title)}")
+        cover_cache_put(artist, album or title, cover.image_data)
+
+
 def main():
     global verbose
 
@@ -347,6 +422,16 @@ def main():
                     "fetch album name/cover from Google Search."
     )
 
+    # --info
+    parser.add_argument("-i", "--info",
+                        action="store_const", const=True, default=False,
+                        dest="info",
+                        help="Prints the metadata of the given files (useful for grep)")
+    # --human-info
+    parser.add_argument("-I", "--human-info",
+                        action="store_const", const=True, default=False,
+                        dest="human_info",
+                        help="Prints the metadata of the given files well formatted")
     # --extract [<regex>]
     parser.add_argument("-e", "--extract",
                         nargs="?", const=DEFAULT_TAGS_EXTRACTOR, default=False,
@@ -381,6 +466,13 @@ def main():
                         dest="force_cover", metavar="RESOLUTION",
                         help=f"Always download the cover using the optional given resolution "
                              f"(default is {DEFAULT_COVER_RESOLUTION}) (requires sacad)")
+    # --precache
+    parser.add_argument("-k", "--precache",
+                        action="store_const", const=True, default=False,
+                        dest="precache",
+                        help="Before fetch the covers, build a cache of covers "
+                             "by reading the entire directory of given file(s) "
+                             "(if a song has the same album the cached one will be used)")
     # --verbose
     parser.add_argument("-v", "--verbose",
                         action="store_const", const=True, default=False,
@@ -404,10 +496,13 @@ def main():
     # Read args
     parsed = vars(parser.parse_args(sys.argv[1:]))
 
+    info = parsed.get("info")
+    human_info = parsed.get("human_info")
     extract = parsed.get("extract")
     force_extract = parsed.get("force_extract")
     cover = parsed.get("cover")
     force_cover = parsed.get("force_cover")
+    precache = parsed.get("precache")
     album = parsed.get("album")
     force_album = parsed.get("force_album")
     verbose = parsed.get("verbose")
@@ -432,10 +527,11 @@ def main():
     do_extract = True if (extract or force_extract) else False
     do_cover = True if (cover or force_cover) else False
     do_album = True if (album or force_album) else False
-    dos = [do_extract, do_cover, do_album]
+    do_info = True if (info or human_info) else False
+    dos = [do_extract, do_cover, do_album, do_info]
 
     if not dos.count(True):
-        abort("No action given, either --[force-]extract, "
+        abort("No action given, either --info, --[force-]extract, "
               "--[force-]cover or --[force-]album must be given")
 
     # Initialize selenium driver, if needed
@@ -470,10 +566,24 @@ def main():
 
     n = len(mp3_input_files)
 
+    # Before mp3norm each file, build a cache of the known covers
+    # so that we will use those if a song with the same album occurs
+    if precache:
+        if mp3_input.is_file():
+            # Build the cache for the directory of the file
+            for p in list(mp3_input.parent.iterdir()):
+                mp3norm_cache(p)
+        else:
+            # Build the cache by taking each file into exam
+            for mp3 in mp3_input_files:
+                mp3norm_cache(mp3)
+
     # mp3norm for each file
     for idx, mp3 in enumerate(mp3_input_files):
         print(f"[{str(idx + 1).rjust(len(str(n)))}/{n}] {mp3.name}")
         mp3norm(mp3,
+                info=do_info,
+                human_info=human_info,
                 extract=do_extract,
                 force_extract=force_extract,
                 extract_pattern=extract_pattern,
@@ -483,7 +593,7 @@ def main():
                 force_download_cover=force_cover,
                 cover_resolution=cover_resolution)
 
-    if firefox:
+    if firefox and not show_driver:
         firefox.close()
 
 if __name__ == "__main__":
