@@ -1,0 +1,10 @@
+LICENSE
+MANIFEST.in
+README.MD
+setup.py
+mp3norm.egg-info/PKG-INFO
+mp3norm.egg-info/SOURCES.txt
+mp3norm.egg-info/dependency_links.txt
+mp3norm.egg-info/entry_points.txt
+mp3norm.egg-info/requires.txt
+mp3norm.egg-info/top_level.txt
