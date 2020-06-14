@@ -55,7 +55,7 @@ def cover_cache_put(artist: str, album: str, cover: bytes):
 def cover_cache_get(artist: str, album: str) -> Optional[bytes]:
     if not artist or not album:
         return None
-    return cover_cache[(artist.lower(), album.lower())]
+    return cover_cache.get((artist.lower(), album.lower()))
 
 def cover_cache_has(artist: str, album: str) -> bool:
     if not artist or not album:

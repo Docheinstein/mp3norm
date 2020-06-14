@@ -12,7 +12,7 @@ print("setup.py prefix:", sys.prefix)
 
 setup(
     name="mp3norm",
-    version="0.3",
+    version="0.5",
 
     # Requires python3.6
     python_requires=">=3.6",
