@@ -2,3 +2,4 @@
 /dist/
 /mp3norm.egg-info/
 geckodriver.log
+/mp3norm/__pycache__

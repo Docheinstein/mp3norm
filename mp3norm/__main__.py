@@ -37,7 +37,7 @@ DEFAULT_COVER_RESOLUTION = 600
 
 # Don't know if those will ever change
 GOOGLE_META_CONTAINER_CLASSNAME = "zloOqf"
-GOOGLE_META_KEY_CLASSNAME = "fl"
+GOOGLE_META_KEY_CLASSNAME = "w8qArf"
 GOOGLE_META_VALUE_CLASSNAME = "LrzXr"
 
 verbose = False
@@ -125,27 +125,48 @@ def google_fetch_album_name(artist: str, title: str) -> Optional[str]:
     try:
         wait = WebDriverWait(firefox, 5)
         wait.until(presence_of_element_located((By.CLASS_NAME, GOOGLE_META_CONTAINER_CLASSNAME)))
-        metadata_containers = firefox.find_elements_by_class_name("zloOqf")
+        metadata_containers = firefox.find_elements_by_class_name(GOOGLE_META_CONTAINER_CLASSNAME)
 
         vprint(f"\t\t{len(metadata_containers)} metadata found")
 
         for metadata_container in metadata_containers:
-            key = metadata_container.find_element_by_class_name(GOOGLE_META_KEY_CLASSNAME).text
-            val = metadata_container.find_element_by_class_name(GOOGLE_META_VALUE_CLASSNAME).text
+            key = metadata_container.find_element_by_class_name(GOOGLE_META_KEY_CLASSNAME)
+            # vprint("Key [0]", key.get_attribute('innerHTML'))
+            try:
+                key = key.find_element_by_class_name("fl")
+                # vprint("Key [1]", key.get_attribute('innerHTML'))
+            except:
+                pass
+            finally:
+                key = key.get_attribute('innerHTML')
+                # vprint("Key [2]", key)
+
+            val = metadata_container.find_element_by_class_name(GOOGLE_META_VALUE_CLASSNAME)
+            # vprint("Val [0]", val.get_attribute('innerHTML'))
+            try:
+                val = val.find_element_by_class_name("fl")
+                # vprint("Val [1]", val.get_attribute('innerHTML'))
+            except:
+                pass
+            finally:
+                val = val.get_attribute('innerHTML')
+                # vprint("Val [2]", val)
+
             vprint(f"\t\t\t{key} = {val}")
 
-            if key == "Album":
+            if key.startswith("Album"):
                 album = val # album found
-                break
 
-            if key == "Tipo album" or key == "Album type" or \
-                key == "Generi" or key == "Genre" or \
-                key == "Data di uscita" or key == "Release date" or \
-                key == "Casa discografica" or key == "Label":
+            """
+            elif key.startswith("Tipo album") or key.startswith("Album type") or \
+                key.startswith("Generi") or key.startswith("Genre") or \
+                key.startswith("Data di uscita") or key.startswith("Release date") or \
+                key.startswith("Casa discografica") or key.startswith("Label"):
                 album = title # the song name is the album name
-                break
+            """
 
-    except Exception:
+    except Exception as e:
+        vprint(f"Exception: {e}")
         return None
 
     return album
